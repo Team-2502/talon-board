@@ -36,13 +36,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {LayoutData, Position, Positions, SettingsData, TelemetryData, TelemetryItem} from "@/lib/types";
-import { TelemetrySelector } from "@/components/widgets/selector";
+import {SelectorData, TelemetrySelector} from "@/components/widgets/selector";
 
 const TelemetryDashboard: React.FC = () => {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
     const [widgets, setWidgets] = useState<string[]>([]);
-    const [telemetryData, setTelemetryData] = useState<TelemetryData>({});
+    const [telemetryData, setTelemetryData] = useState<TelemetryData>({widget_type: ""});
     const [positions, setPositions] = useState<Positions>({});
     const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -181,6 +181,20 @@ const TelemetryDashboard: React.FC = () => {
     const clearLayout = (): void => {
         setWidgets([]);
         setPositions({});
+    };
+
+    const handleSelectorChange = async (key: string, newData: SelectorData) => {
+        try {
+            await fetch(`http://localhost:5807/telemetry/${key}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newData),
+            });
+        } catch (error) {
+            console.error('Error updating selector:', error);
+        }
     };
 
     if (!mounted) {
@@ -331,22 +345,17 @@ const TelemetryDashboard: React.FC = () => {
                 onDragOver={onDragOver}
             >
                 {widgets.map((key) => {
-                    const widgetData = telemetryData[key];
-                    if (!widgetData) return null;
+                    const rawValue = telemetryData[key];
+                    let isSelector = false;
+                    let selectorData: SelectorData | null = null;
 
-                    // Check if this is a selector widget
-                    if (widgetData.widget_type === 'Selector') {
-                        return (
-                            <TelemetrySelector
-                                key={key}
-                                dataKey={key}
-                                position={positions[key]}
-                                onDragStart={(e) => onDragStart(e, key)}
-                                onDrag={(e) => onDragWidget(e, key)}
-                                onRemove={() => removeWidget(key)}
-                            />
-                        );
-                    }
+                    try {
+                        const parsed = JSON.parse(rawValue);
+                        if (parsed.options && Array.isArray(parsed.options) && parsed.selected) {
+                            isSelector = true;
+                            selectorData = parsed;
+                        }
+                    } catch {}
 
                     return (
                         <Card
@@ -372,9 +381,17 @@ const TelemetryDashboard: React.FC = () => {
                                 </Button>
                             </CardHeader>
                             <CardContent className="p-4 pt-0">
-                                <div className="text-2xl font-bold">
-                                    {telemetryData[key] || 'No data'}
-                                </div>
+                                {isSelector && selectorData ? (
+                                    <TelemetrySelector
+                                        selectorKey={key}
+                                        data={selectorData}
+                                        onValueChange={handleSelectorChange}
+                                    />
+                                ) : (
+                                    <div className="text-2xl font-bold">
+                                        {rawValue || 'No data'}
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     );
