@@ -32,6 +32,7 @@ const TelemetryDashboard: React.FC = () => {
     const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [settings, setSettings] = useState<SettingsData>({
+        url: "http://localhost:5807",
         refreshRate: 100,
         autoSave: true,
     });
@@ -52,7 +53,7 @@ const TelemetryDashboard: React.FC = () => {
         while (retryQueue.current.length > 0) {
             const { key, data } = retryQueue.current.shift()!;
             try {
-                const response = await fetch(`http://localhost:5807/telemetry/${key}`, {
+                const response = await fetch(`${settings.url}/telemetry/${key}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),
@@ -69,7 +70,7 @@ const TelemetryDashboard: React.FC = () => {
 
     const checkServerStatus = useCallback(async () => {
         try {
-            const response = await fetch('http://localhost:5807/status');
+            const response = await fetch(`${settings.url}/status`);
             setConnectionStatus(response.ok ? ConnectionStatus.Connected : ConnectionStatus.Disconnected);
         } catch (error) {
             setConnectionStatus(ConnectionStatus.Disconnected);
@@ -103,7 +104,7 @@ const TelemetryDashboard: React.FC = () => {
         };
 
         try {
-            await fetch('http://localhost:5807/telemetry_layout', {
+            await fetch(`${settings.url}/telemetry_layout`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -117,7 +118,7 @@ const TelemetryDashboard: React.FC = () => {
 
     const loadLayout = async (): Promise<void> => {
         try {
-            const response = await fetch('http://localhost:5807/telemetry_layout');
+            const response = await fetch(`${settings.url}/telemetry_layout`);
             if (response.ok) {
                 const data: LayoutData = await response.json();
                 setWidgets(data.widgets || []);
@@ -131,7 +132,7 @@ const TelemetryDashboard: React.FC = () => {
 
     const fetchData = useCallback(async (): Promise<void> => {
         try {
-            const response = await fetch('http://localhost:5807/telemetry');
+            const response = await fetch(`${settings.url}/telemetry`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data: TelemetryItem[] = await response.json();
 
@@ -226,7 +227,7 @@ const TelemetryDashboard: React.FC = () => {
         setSelectorStatuses(prev => ({ ...prev, [key]: UpdateStatus.Pending }));
 
         try {
-            const response = await fetch(`http://localhost:5807/telemetry/${key}`, {
+            const response = await fetch(`${settings.url}/telemetry/${key}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newData),
@@ -337,24 +338,24 @@ const TelemetryDashboard: React.FC = () => {
                                         <Label>Theme</Label>
                                         <Select value={theme} onValueChange={setTheme}>
                                             <SelectTrigger>
-                                                <SelectValue />
+                                                <SelectValue/>
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="light">
                                                     <div className="flex items-center">
-                                                        <Sun className="h-4 w-4 mr-2" />
+                                                        <Sun className="h-4 w-4 mr-2"/>
                                                         Light
                                                     </div>
                                                 </SelectItem>
                                                 <SelectItem value="dark">
                                                     <div className="flex items-center">
-                                                        <Moon className="h-4 w-4 mr-2" />
+                                                        <Moon className="h-4 w-4 mr-2"/>
                                                         Dark
                                                     </div>
                                                 </SelectItem>
                                                 <SelectItem value="system">
                                                     <div className="flex items-center">
-                                                        <Monitor className="h-4 w-4 mr-2" />
+                                                        <Monitor className="h-4 w-4 mr-2"/>
                                                         System
                                                     </div>
                                                 </SelectItem>
@@ -362,11 +363,24 @@ const TelemetryDashboard: React.FC = () => {
                                         </Select>
                                     </div>
                                     <div className="space-y-2">
+                                        <Label>url</Label>
+                                        <Input
+                                            value={settings.url}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                url: e.target.value
+                                            })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
                                         <Label>Refresh Rate (ms)</Label>
                                         <Input
                                             type="number"
                                             value={settings.refreshRate}
-                                            onChange={(e) => setSettings({...settings, refreshRate: parseInt(e.target.value)})}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                refreshRate: parseInt(e.target.value)
+                                            })}
                                         />
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -378,15 +392,15 @@ const TelemetryDashboard: React.FC = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <Button onClick={saveLayout} className="w-full">
-                                            <Save className="h-4 w-4 mr-2" />
+                                            <Save className="h-4 w-4 mr-2"/>
                                             Save Layout
                                         </Button>
                                         <Button onClick={loadLayout} variant="outline" className="w-full">
-                                            <Upload className="h-4 w-4 mr-2" />
+                                            <Upload className="h-4 w-4 mr-2"/>
                                             Load Layout
                                         </Button>
                                         <Button onClick={clearLayout} variant="destructive" className="w-full">
-                                            <Trash className="h-4 w-4 mr-2" />
+                                            <Trash className="h-4 w-4 mr-2"/>
                                             Clear Layout
                                         </Button>
                                     </div>
@@ -431,7 +445,7 @@ const TelemetryDashboard: React.FC = () => {
                             <CardHeader className="p-4 flex flex-row items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <CardTitle className="text-sm font-medium">{key}</CardTitle>
-                                    {connectionStatus === 'disconnected' && (
+                                    {connectionStatus === ConnectionStatus.Disconnected && (
                                         <span className="text-red-500 text-xs">(Offline)</span>
                                     )}
                                 </div>
@@ -447,6 +461,7 @@ const TelemetryDashboard: React.FC = () => {
                             <CardContent className="p-4 pt-0">
                                 {isSelector && selectorData ? (
                                     <TelemetrySelector
+                                        url={settings.url}
                                         selectorKey={key}
                                         data={selectorData}
                                         onValueChange={handleSelectorChange}

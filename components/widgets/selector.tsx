@@ -17,6 +17,7 @@ export interface SelectorData {
 }
 
 interface TelemetrySelectorProps {
+    url: string;
     selectorKey: string;
     data: SelectorData;
     onValueChange: (key: string, value: SelectorData) => void;
@@ -25,6 +26,7 @@ interface TelemetrySelectorProps {
 }
 
 export const TelemetrySelector: React.FC<TelemetrySelectorProps> = ({
+                                                                        url,
                                                                         selectorKey,
                                                                         data,
                                                                         onValueChange,
@@ -37,7 +39,7 @@ export const TelemetrySelector: React.FC<TelemetrySelectorProps> = ({
         if (connectionStatus === ConnectionStatus.Connected) {
             const verifyWithServer = async () => {
                 try {
-                    const response = await fetch(`http://localhost:5807/telemetry/${selectorKey}`);
+                    const response = await fetch(`${url}/telemetry/${selectorKey}`);
                     if (!response.ok) {
                         setIsVerified(false);
                         return;
