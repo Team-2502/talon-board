@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -11,7 +12,10 @@ import {
     ChevronRight,
     Save,
     Upload,
-    Trash
+    Trash,
+    Moon,
+    Sun,
+    Monitor
 } from "lucide-react";
 import {
     Sheet,
@@ -20,29 +24,39 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {LayoutData, Position, Positions, SettingsData, TelemetryData, TelemetryItem} from "@/lib/types";
 
-const TelemetryDashboard = () => {
-    const [widgets, setWidgets] = useState([]);
-    const [telemetryData, setTelemetryData] = useState({});
-    const [positions, setPositions] = useState({});
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+const TelemetryDashboard: React.FC = () => {
+    const { theme, setTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+    const [widgets, setWidgets] = useState<string[]>([]);
+    const [telemetryData, setTelemetryData] = useState<TelemetryData>({});
+    const [positions, setPositions] = useState<Positions>({});
+    const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [settings, setSettings] = useState({
+    const [settings, setSettings] = useState<SettingsData>({
         refreshRate: 100,
-        darkMode: false,
         autoSave: true,
-        layoutName: 'default'
     });
 
-    const SIDEBAR_WIDTH = 256;
-    const COLLAPSED_WIDTH = 52;
+    // next-themes mounting check
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
-    const saveLayout = async () => {
-        const layoutData = {
+    const saveLayout = async (): Promise<void> => {
+        const layoutData: LayoutData = {
             widgets,
             positions,
             settings
@@ -61,11 +75,11 @@ const TelemetryDashboard = () => {
         }
     };
 
-    const loadLayout = async () => {
+    const loadLayout = async (): Promise<void> => {
         try {
             const response = await fetch('http://localhost:5807/telemetry_layout');
             if (response.ok) {
-                const data = await response.json();
+                const data: LayoutData = await response.json();
                 setWidgets(data.widgets || []);
                 setPositions(data.positions || {});
                 setSettings(data.settings || settings);
@@ -75,18 +89,17 @@ const TelemetryDashboard = () => {
         }
     };
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (): Promise<void> => {
         try {
             const response = await fetch('http://localhost:5807/telemetry');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const data = await response.json();
+            const data: TelemetryItem[] = await response.json();
 
             setTelemetryData(prevData => {
-                const isEqual = JSON.stringify(prevData) === JSON.stringify(
-                    Object.fromEntries(data.map(item => [item.key, item.value]))
-                );
+                const newData = Object.fromEntries(data.map(item => [item.key, item.value]));
+                const isEqual = JSON.stringify(prevData) === JSON.stringify(newData);
                 if (isEqual) return prevData;
-                return Object.fromEntries(data.map(item => [item.key, item.value]));
+                return newData;
             });
         } catch (error) {
             console.error('Error fetching telemetry:', error);
@@ -110,8 +123,8 @@ const TelemetryDashboard = () => {
         }
     }, [settings.autoSave, widgets, positions]);
 
-    const onDragStart = (e, key) => {
-        const rect = e.target.getBoundingClientRect();
+    const onDragStart = (e: React.DragEvent<HTMLDivElement>, key: string): void => {
+        const rect = e.currentTarget.getBoundingClientRect();
         setDragOffset({
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
@@ -119,154 +132,207 @@ const TelemetryDashboard = () => {
         e.dataTransfer.setData('text/plain', key);
     };
 
-    const onDrop = (e) => {
+    const onDrop = (e: React.DragEvent<HTMLDivElement>): void => {
         e.preventDefault();
         const key = e.dataTransfer.getData('text/plain');
+        const sidebarElement = document.querySelector('[data-sidebar]');
+        const sidebarWidth = sidebarElement ? sidebarElement.getBoundingClientRect().width : 0;
+
         if (!widgets.includes(key)) {
-            setWidgets([...widgets, key]);
-            setPositions({
-                ...positions,
+            setWidgets(prev => [...prev, key]);
+            setPositions(prev => ({
+                ...prev,
                 [key]: {
-                    x: e.clientX - dragOffset.x - (isSidebarCollapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH),
+                    x: e.clientX - dragOffset.x - sidebarWidth,
                     y: e.clientY - dragOffset.y
                 }
-            });
+            }));
         }
     };
 
-    const onDragOver = (e) => {
+    const onDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
         e.preventDefault();
     };
 
-    const removeWidget = (key) => {
-        setWidgets(widgets.filter(w => w !== key));
-        const newPositions = { ...positions };
-        delete newPositions[key];
-        setPositions(newPositions);
+    const removeWidget = (key: string): void => {
+        setWidgets(prev => prev.filter(w => w !== key));
+        setPositions(prev => {
+            const newPositions = { ...prev };
+            delete newPositions[key];
+            return newPositions;
+        });
     };
 
-    const onDragWidget = (e, key) => {
+    const onDragWidget = (e: React.DragEvent<HTMLDivElement>, key: string): void => {
         if (e.clientX === 0 && e.clientY === 0) return;
+        const sidebarElement = document.querySelector('[data-sidebar]');
+        const sidebarWidth = sidebarElement ? sidebarElement.getBoundingClientRect().width : 0;
+
         setPositions(prev => ({
             ...prev,
             [key]: {
-                x: e.clientX - dragOffset.x - (isSidebarCollapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH),
+                x: e.clientX - dragOffset.x - sidebarWidth,
                 y: e.clientY - dragOffset.y
             }
         }));
     };
 
-    const clearLayout = () => {
+    const clearLayout = (): void => {
         setWidgets([]);
         setPositions({});
     };
 
+    if (!mounted) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-background">
+                <div className="text-muted-foreground">Loading...</div>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex h-screen">
+        <div className="flex h-screen bg-background">
             {/* Sidebar */}
             <div
+                data-sidebar
                 className={`${
-                    isSidebarCollapsed ? 'w-12' : 'w-64'
-                } border-r bg-gray-100 dark:bg-gray-800 transition-all duration-300 flex flex-col`}
+                    isSidebarCollapsed ? 'w-16' : 'w-64'
+                } border-r bg-card transition-all duration-300 flex flex-col shrink-0`}
             >
-                <div className="flex justify-between items-center p-4">
-                    {!isSidebarCollapsed && <h2 className="text-lg font-bold">Available Telemetry</h2>}
-                    <button
+                {/* Header */}
+                <div className="flex justify-between items-center p-4 border-b h-14 shrink-0">
+                    {!isSidebarCollapsed && (
+                        <h2 className="text-lg font-semibold">
+                            Telemetry
+                        </h2>
+                    )}
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                        className={`${
+                            isSidebarCollapsed ? 'w-full' : ''
+                        }`}
                     >
-                        {isSidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
-                    </button>
+                        {isSidebarCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+                    </Button>
                 </div>
 
-                {!isSidebarCollapsed && (
-                    <ScrollArea className="flex-1">
-                        {Object.entries(telemetryData).map(([key]) => (
-                            <div
-                                key={key}
-                                draggable
-                                onDragStart={(e) => onDragStart(e, key)}
-                                className="mx-2 mb-2 p-2 bg-white dark:bg-gray-700 rounded-lg cursor-move hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center"
-                            >
-                                <Grip className="h-4 w-4 mr-2" />
-                                <span className="text-sm">{key}</span>
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-hidden flex flex-col">
+                    {!isSidebarCollapsed ? (
+                        <ScrollArea className="flex-1 px-2">
+                            <div className="space-y-2 py-2">
+                                {Object.entries(telemetryData).map(([key]) => (
+                                    <div
+                                        key={key}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, key)}
+                                        className="p-2 bg-muted rounded-lg cursor-move hover:bg-muted/80 flex items-center group"
+                                    >
+                                        <Grip className="h-4 w-4 mr-2 text-muted-foreground group-hover:text-foreground" />
+                                        <span className="text-sm">{key}</span>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </ScrollArea>
-                )}
+                        </ScrollArea>
+                    ) : (
+                        <div className="flex-1" />
+                    )}
 
-                <div className="p-2 border-t">
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" className="w-full justify-start">
-                                <Settings className="h-4 w-4 mr-2" />
-                                {!isSidebarCollapsed && "Settings"}
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent>
-                            <SheetHeader>
-                                <SheetTitle>Dashboard Settings</SheetTitle>
-                            </SheetHeader>
-                            <div className="mt-4 space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Layout Name</Label>
-                                    <Input
-                                        value={settings.layoutName}
-                                        onChange={(e) => setSettings({...settings, layoutName: e.target.value})}
-                                    />
+                    {/* Settings Button - Fixed at Bottom */}
+                    <div className="border-t p-2 shrink-0">
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className={`w-full justify-${isSidebarCollapsed ? 'center' : 'start'} h-10`}
+                                >
+                                    <Settings className="h-5 w-5" />
+                                    {!isSidebarCollapsed && (
+                                        <span className="ml-2">Settings</span>
+                                    )}
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent>
+                                <SheetHeader>
+                                    <SheetTitle>Dashboard Settings</SheetTitle>
+                                </SheetHeader>
+                                <div className="mt-6 space-y-6">
+                                    <div className="space-y-2">
+                                        <Label>Theme</Label>
+                                        <Select value={theme} onValueChange={setTheme}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="light">
+                                                    <div className="flex items-center">
+                                                        <Sun className="h-4 w-4 mr-2" />
+                                                        Light
+                                                    </div>
+                                                </SelectItem>
+                                                <SelectItem value="dark">
+                                                    <div className="flex items-center">
+                                                        <Moon className="h-4 w-4 mr-2" />
+                                                        Dark
+                                                    </div>
+                                                </SelectItem>
+                                                <SelectItem value="system">
+                                                    <div className="flex items-center">
+                                                        <Monitor className="h-4 w-4 mr-2" />
+                                                        System
+                                                    </div>
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Refresh Rate (ms)</Label>
+                                        <Input
+                                            type="number"
+                                            value={settings.refreshRate}
+                                            onChange={(e) => setSettings({...settings, refreshRate: parseInt(e.target.value)})}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <Label>Auto Save</Label>
+                                        <Switch
+                                            checked={settings.autoSave}
+                                            onCheckedChange={(checked) => setSettings({...settings, autoSave: checked})}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Button onClick={saveLayout} className="w-full">
+                                            <Save className="h-4 w-4 mr-2" />
+                                            Save Layout
+                                        </Button>
+                                        <Button onClick={loadLayout} variant="outline" className="w-full">
+                                            <Upload className="h-4 w-4 mr-2" />
+                                            Load Layout
+                                        </Button>
+                                        <Button onClick={clearLayout} variant="destructive" className="w-full">
+                                            <Trash className="h-4 w-4 mr-2" />
+                                            Clear Layout
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Refresh Rate (ms)</Label>
-                                    <Input
-                                        type="number"
-                                        value={settings.refreshRate}
-                                        onChange={(e) => setSettings({...settings, refreshRate: parseInt(e.target.value)})}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <Label>Auto Save</Label>
-                                    <Switch
-                                        checked={settings.autoSave}
-                                        onCheckedChange={(checked) => setSettings({...settings, autoSave: checked})}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <Label>Dark Mode</Label>
-                                    <Switch
-                                        checked={settings.darkMode}
-                                        onCheckedChange={(checked) => setSettings({...settings, darkMode: checked})}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Button onClick={saveLayout} className="w-full">
-                                        <Save className="h-4 w-4 mr-2" />
-                                        Save Layout
-                                    </Button>
-                                    <Button onClick={loadLayout} variant="outline" className="w-full">
-                                        <Upload className="h-4 w-4 mr-2" />
-                                        Load Layout
-                                    </Button>
-                                    <Button onClick={clearLayout} variant="destructive" className="w-full">
-                                        <Trash className="h-4 w-4 mr-2" />
-                                        Clear Layout
-                                    </Button>
-                                </div>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                            </SheetContent>
+                        </Sheet>
+                    </div>
                 </div>
             </div>
 
             {/* Main grid area */}
             <div
-                className="flex-1 p-4 bg-gray-200 dark:bg-gray-900 relative"
+                className="flex-1 p-4 bg-muted/30 relative overflow-auto"
                 onDrop={onDrop}
                 onDragOver={onDragOver}
             >
                 {widgets.map((key) => (
                     <Card
                         key={key}
-                        className="absolute cursor-move"
+                        className="absolute cursor-move shadow-lg"
                         style={{
                             transform: `translate(${positions[key]?.x || 0}px, ${positions[key]?.y || 0}px)`,
                             width: '200px',
@@ -277,12 +343,14 @@ const TelemetryDashboard = () => {
                     >
                         <CardHeader className="p-4 flex flex-row items-center justify-between">
                             <CardTitle className="text-sm font-medium">{key}</CardTitle>
-                            <button
+                            <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => removeWidget(key)}
-                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                className="h-6 w-6"
                             >
                                 <X className="h-4 w-4" />
-                            </button>
+                            </Button>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
                             <div className="text-2xl font-bold">
