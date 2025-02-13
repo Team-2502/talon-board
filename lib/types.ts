@@ -10,7 +10,6 @@ export interface Position {
 
 export interface TelemetryData {
     [key: string]: string | number;
-    widget_type: string;
 }
 
 export interface Positions {
@@ -26,4 +25,28 @@ export interface LayoutData {
 export interface TelemetryItem {
     key: string;
     value: string | number;
+}
+
+export enum ConnectionStatus {
+    Connected = "CONNECTED",
+    Disconnected = "DISCONNECTED",
+    Checking = "CHECKING"
+}
+
+export enum UpdateStatus {
+    Success = "SUCCESS",
+    Error = "ERROR",
+    Pending = "PENDING"
+}
+
+export enum SelectorStatus {
+    Online = "ONLINE",
+    Offline = "OFFLINE"
+}
+
+export enum SelectorVisualState {
+    Online = "ONLINE",
+    Offline = "OFFLINE",
+    Syncing = "SYNCING",
+    Error = "ERROR"
 }

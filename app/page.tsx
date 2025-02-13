@@ -1,41 +1,26 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useTheme } from "next-themes";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {useTheme} from "next-themes";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
+import {ScrollArea} from "@/components/ui/scroll-area";
+import {ChevronLeft, ChevronRight, Grip, Monitor, Moon, Save, Settings, Sun, Trash, Upload, X} from "lucide-react";
+import {Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,} from "@/components/ui/sheet";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select";
+import {Button} from "@/components/ui/button";
+import {Input} from "@/components/ui/input";
+import {Label} from "@/components/ui/label";
+import {Switch} from "@/components/ui/switch";
 import {
-    Settings,
-    Grip,
-    X,
-    ChevronLeft,
-    ChevronRight,
-    Save,
-    Upload,
-    Trash,
-    Moon,
-    Sun,
-    Monitor
-} from "lucide-react";
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {LayoutData, Position, Positions, SettingsData, TelemetryData, TelemetryItem} from "@/lib/types";
+    ConnectionStatus,
+    LayoutData,
+    Position,
+    Positions,
+    SettingsData,
+    TelemetryData,
+    TelemetryItem,
+    UpdateStatus
+} from "@/lib/types";
 import {SelectorData, TelemetrySelector} from "@/components/widgets/selector";
 
 const TelemetryDashboard: React.FC = () => {
@@ -50,11 +35,65 @@ const TelemetryDashboard: React.FC = () => {
         refreshRate: 100,
         autoSave: true,
     });
+    const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.Checking);
+    const [selectorStatuses, setSelectorStatuses] = useState<Record<string, UpdateStatus | undefined>>({});
+    const retryQueue = useRef<Array<{ key: string; data: SelectorData }>>([]);
+    const isProcessing = useRef(false);
 
     // next-themes mounting check
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    const processQueue = useCallback(async () => {
+        if (isProcessing.current || connectionStatus !== ConnectionStatus.Connected) return;
+        isProcessing.current = true;
+
+        while (retryQueue.current.length > 0) {
+            const { key, data } = retryQueue.current.shift()!;
+            try {
+                const response = await fetch(`http://localhost:5807/telemetry/${key}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                });
+
+                if (!response.ok) retryQueue.current.push({ key, data });
+            } catch (error) {
+                retryQueue.current.push({ key, data });
+            }
+        }
+
+        isProcessing.current = false;
+    }, [connectionStatus]);
+
+    const checkServerStatus = useCallback(async () => {
+        try {
+            const response = await fetch('http://localhost:5807/status');
+            setConnectionStatus(response.ok ? ConnectionStatus.Connected : ConnectionStatus.Disconnected);
+        } catch (error) {
+            setConnectionStatus(ConnectionStatus.Disconnected);
+        }
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(checkServerStatus, 1000);
+        return () => clearInterval(interval);
+    }, [checkServerStatus]);
+
+    useEffect(() => {
+        if (connectionStatus == ConnectionStatus.Connected) {
+            setSelectorStatuses(prev => {
+                const newStatuses = { ...prev };
+                Object.keys(newStatuses).forEach(key => {
+                    if (newStatuses[key] == UpdateStatus.Error) {
+                        delete newStatuses[key];
+                    }
+                });
+                return newStatuses;
+            });
+        }
+    }, [connectionStatus]);
 
     const saveLayout = async (): Promise<void> => {
         const layoutData: LayoutData = {
@@ -184,17 +223,27 @@ const TelemetryDashboard: React.FC = () => {
     };
 
     const handleSelectorChange = async (key: string, newData: SelectorData) => {
+        setSelectorStatuses(prev => ({ ...prev, [key]: UpdateStatus.Pending }));
+
         try {
-            await fetch(`http://localhost:5807/telemetry/${key}`, {
+            const response = await fetch(`http://localhost:5807/telemetry/${key}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newData),
             });
+
+            if (!response.ok) {
+                retryQueue.current.push({ key, data: newData });
+                setSelectorStatuses(prev => ({ ...prev, [key]: UpdateStatus.Error }));
+            } else {
+                setSelectorStatuses(prev => ({ ...prev, [key]: undefined }));
+            }
         } catch (error) {
-            console.error('Error updating selector:', error);
+            retryQueue.current.push({ key, data: newData });
+            setSelectorStatuses(prev => ({ ...prev, [key]: UpdateStatus.Error }));
         }
+
+        processQueue();
     };
 
     if (!mounted) {
@@ -207,6 +256,16 @@ const TelemetryDashboard: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-background">
+            <div className="flex h-screen bg-background">
+                {/* Connection status banner */}
+                {connectionStatus !== ConnectionStatus.Connected && (
+                    <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-2 text-center z-50">
+                        {connectionStatus === ConnectionStatus.Disconnected
+                            ? "Cannot connect to server - check network connection"
+                            : "Connecting to server..."}
+                    </div>
+                )}
+            </div>
             {/* Sidebar */}
             <div
                 data-sidebar
@@ -370,7 +429,12 @@ const TelemetryDashboard: React.FC = () => {
                             onDrag={(e) => onDragWidget(e, key)}
                         >
                             <CardHeader className="p-4 flex flex-row items-center justify-between">
-                                <CardTitle className="text-sm font-medium">{key}</CardTitle>
+                                <div className="flex items-center gap-2">
+                                    <CardTitle className="text-sm font-medium">{key}</CardTitle>
+                                    {connectionStatus === 'disconnected' && (
+                                        <span className="text-red-500 text-xs">(Offline)</span>
+                                    )}
+                                </div>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -386,6 +450,8 @@ const TelemetryDashboard: React.FC = () => {
                                         selectorKey={key}
                                         data={selectorData}
                                         onValueChange={handleSelectorChange}
+                                        connectionStatus={connectionStatus}
+                                        updateStatus={selectorStatuses[key]}
                                     />
                                 ) : (
                                     <div className="text-2xl font-bold">
