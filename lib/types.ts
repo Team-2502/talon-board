@@ -10,6 +10,7 @@ export interface Position {
 
 export interface TelemetryData {
     [key: string]: string | number;
+    widget_type: string;
 }
 
 export interface Positions {

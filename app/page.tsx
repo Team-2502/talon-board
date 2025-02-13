@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {LayoutData, Position, Positions, SettingsData, TelemetryData, TelemetryItem} from "@/lib/types";
+import { TelemetrySelector } from "@/components/widgets/selector";
 
 const TelemetryDashboard: React.FC = () => {
     const { theme, setTheme } = useTheme();
@@ -329,36 +330,55 @@ const TelemetryDashboard: React.FC = () => {
                 onDrop={onDrop}
                 onDragOver={onDragOver}
             >
-                {widgets.map((key) => (
-                    <Card
-                        key={key}
-                        className="absolute cursor-move shadow-lg"
-                        style={{
-                            transform: `translate(${positions[key]?.x || 0}px, ${positions[key]?.y || 0}px)`,
-                            width: '200px',
-                        }}
-                        draggable="true"
-                        onDragStart={(e) => onDragStart(e, key)}
-                        onDrag={(e) => onDragWidget(e, key)}
-                    >
-                        <CardHeader className="p-4 flex flex-row items-center justify-between">
-                            <CardTitle className="text-sm font-medium">{key}</CardTitle>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeWidget(key)}
-                                className="h-6 w-6"
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                            <div className="text-2xl font-bold">
-                                {telemetryData[key] || 'No data'}
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                {widgets.map((key) => {
+                    const widgetData = telemetryData[key];
+                    if (!widgetData) return null;
+
+                    // Check if this is a selector widget
+                    if (widgetData.widget_type === 'Selector') {
+                        return (
+                            <TelemetrySelector
+                                key={key}
+                                dataKey={key}
+                                position={positions[key]}
+                                onDragStart={(e) => onDragStart(e, key)}
+                                onDrag={(e) => onDragWidget(e, key)}
+                                onRemove={() => removeWidget(key)}
+                            />
+                        );
+                    }
+
+                    return (
+                        <Card
+                            key={key}
+                            className="absolute cursor-move shadow-lg"
+                            style={{
+                                transform: `translate(${positions[key]?.x || 0}px, ${positions[key]?.y || 0}px)`,
+                                width: '200px',
+                            }}
+                            draggable="true"
+                            onDragStart={(e) => onDragStart(e, key)}
+                            onDrag={(e) => onDragWidget(e, key)}
+                        >
+                            <CardHeader className="p-4 flex flex-row items-center justify-between">
+                                <CardTitle className="text-sm font-medium">{key}</CardTitle>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeWidget(key)}
+                                    className="h-6 w-6"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                                <div className="text-2xl font-bold">
+                                    {telemetryData[key] || 'No data'}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
             </div>
         </div>
     );
