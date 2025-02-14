@@ -61,21 +61,23 @@ const TelemetryDashboard: React.FC = () => {
 
                 if (!response.ok) retryQueue.current.push({ key, data });
             } catch (error) {
+                console.error(error);
                 retryQueue.current.push({ key, data });
             }
         }
 
         isProcessing.current = false;
-    }, [connectionStatus]);
+    }, [connectionStatus, settings.url]);
 
     const checkServerStatus = useCallback(async () => {
         try {
             const response = await fetch(`${settings.url}/status`);
             setConnectionStatus(response.ok ? ConnectionStatus.Connected : ConnectionStatus.Disconnected);
         } catch (error) {
+            console.error(error);
             setConnectionStatus(ConnectionStatus.Disconnected);
         }
-    }, []);
+    }, [settings.url]);
 
     useEffect(() => {
         const interval = setInterval(checkServerStatus, 1000);
@@ -145,11 +147,11 @@ const TelemetryDashboard: React.FC = () => {
         } catch (error) {
             console.error('Error fetching telemetry:', error);
         }
-    }, []);
+    }, [settings.url]);
 
     useEffect(() => {
         loadLayout();
-    }, []);
+    }, [loadLayout]);
 
     useEffect(() => {
         fetchData();
@@ -162,7 +164,7 @@ const TelemetryDashboard: React.FC = () => {
             const saveInterval = setInterval(saveLayout, 5000);
             return () => clearInterval(saveInterval);
         }
-    }, [settings.autoSave, widgets, positions]);
+    }, [settings.autoSave, widgets, positions, saveLayout]);
 
     const onDragStart = (e: React.DragEvent<HTMLDivElement>, key: string): void => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -240,6 +242,7 @@ const TelemetryDashboard: React.FC = () => {
                 setSelectorStatuses(prev => ({ ...prev, [key]: undefined }));
             }
         } catch (error) {
+            console.error(error);
             retryQueue.current.push({ key, data: newData });
             setSelectorStatuses(prev => ({ ...prev, [key]: UpdateStatus.Error }));
         }
@@ -423,7 +426,7 @@ const TelemetryDashboard: React.FC = () => {
                     let selectorData: SelectorData | null = null;
 
                     try {
-                        const parsed = JSON.parse(rawValue);
+                        const parsed = JSON.parse(rawValue.toString());
                         if (parsed.options && Array.isArray(parsed.options) && parsed.selected) {
                             isSelector = true;
                             selectorData = parsed;

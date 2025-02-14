@@ -1,5 +1,3 @@
-import {Address} from "node:cluster";
-
 export interface SettingsData {
     url: string,
     refreshRate: number,

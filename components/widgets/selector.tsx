@@ -60,6 +60,7 @@ export const TelemetrySelector: React.FC<TelemetrySelectorProps> = ({
                         });
                     }
                 } catch (error) {
+                    console.error(error);
                     setIsVerified(false);
                 }
             };
@@ -68,7 +69,7 @@ export const TelemetrySelector: React.FC<TelemetrySelectorProps> = ({
             const interval = setInterval(verifyWithServer, 5000);
             return () => clearInterval(interval);
         }
-    }, [connectionStatus, selectorKey, data.selected]);
+    }, [connectionStatus, selectorKey, data.selected, url, data, onValueChange]);
 
     const getVisualState = (): SelectorVisualState => {
         if (updateStatus === UpdateStatus.Pending) return SelectorVisualState.Syncing;
